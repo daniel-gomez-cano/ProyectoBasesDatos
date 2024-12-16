@@ -69,4 +69,4 @@ boton_iniciar = tk.Button(ventana, text="Iniciar Sesión", command=iniciar_sesio
 boton_iniciar.pack(pady=20)
 
 ventana.mainloop()
-"""Cambios para el hpta commit"""
+"""Otro hpta cambio para el hpta commit"""
