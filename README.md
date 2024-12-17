@@ -1,1 +1,7 @@
 # ProyectoBasesDatos
+
+EN PGADMIN CREAR BASE DE DATOS CON EL NOMBRE INDICADO EN LA DOCUMENTACIÓN
+DEL PROYECTO. LUEGO INSERTAR LOS DATOS TAMBIÉN ALLÍ DADOS EN EL INSERT
+
+Si no entienden algo me avisan :D
+Y si no entiendo algo me ayudan D:
