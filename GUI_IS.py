@@ -17,12 +17,6 @@ def conectar_db():
         print("Error al conectar a la base de datos:", e)
         return None
 
-# Prueba de conexión
-if __name__ == "__main__":
-    db = conectar_db()
-    if db:
-        db.close()
-
 # Los INSERT que utilicé en la base de datos:
 """INSERT INTO Afiliado (DI, Tipo, Fecha_Nac, Estado, Nombres, Apellidos, Genero, Correo_electronico, Telefono, Ciudad_residencia, Direccion, Estado_actual)
 VALUES (101, 'CC', '2000-01-01', 'Activo', 'Juan', 'Perez', 'M', 'juan.perez@mail.com', '1234567', 'Medellin', 'Calle 123', 'Activo');
@@ -30,7 +24,7 @@ VALUES (101, 'CC', '2000-01-01', 'Activo', 'Juan', 'Perez', 'M', 'juan.perez@mai
 -- Datos de ejemplo para Cotizante
 INSERT INTO Cotizante (DI, Tipo, Salario, Fecha_1_afiliacion, IPS)
 VALUES (101, 'Dependiente', 2500.00, '2023-01-01', NULL);
-
+//  
 -- Datos de ejemplo para Empresa
 INSERT INTO Empresa (NIT, Ciudad, Razon_social, Direccion, Telefono, Contacto)
 VALUES (555001, 'Bogota', 'Empresa X', 'Calle Falsa 123', '9876543', 'Maria Gonzalez');"""
@@ -44,11 +38,11 @@ def validar_usuario(usuario, contrasena, rol):
     try:
         cursor = conexion.cursor()
         query = """
-            SELECT Nombres, Estado_actual 
-            FROM Afiliado 
-            WHERE Nombres = %s AND Telefono = %s AND Estado_actual = 'Activo'
-        """# Aquí es donde pasa la query para validar el usuario siendo telefono la contraseña
-        cursor.execute(query, (usuario, contrasena))
+            SELECT Usuario, Rol
+            FROM Usuario
+            WHERE Usuario = %s AND Contrasena = %s AND Rol = %s
+        """
+        cursor.execute(query, (usuario, contrasena, rol))
         resultado = cursor.fetchone()
         conexion.close()
         return resultado is not None
@@ -60,7 +54,6 @@ def iniciar_sesion():
     usuario = entrada_usuario.get()
     contrasena = entrada_contrasena.get()
     rol = rol_var.get()
-    # Pasen usuario Juan contraseña 1234567 Rol Cotizante
     if not usuario or not contrasena:
         messagebox.showerror("Error", "Por favor, ingrese usuario y contraseña.")
         return
@@ -230,7 +223,10 @@ def abrir_beneficiarios(parent):
     entrada_di_cotizante = tk.Entry(frame_registro)
     entrada_di_cotizante.pack(pady=2)
 
-    boton_registrar = tk.Button(frame_registro, text="Registrar Beneficiario", command=lambda: mostrar_mensaje("Beneficiario registrado"))
+    boton_registrar = tk.Button(frame_registro, text="Registrar Beneficiario", 
+                            command=lambda: registrar_beneficiario(entrada_di.get(), 
+                                                                   entrada_parentesco.get(), 
+                                                                   entrada_di_cotizante.get()))
     boton_registrar.pack(pady=10)
 
     # Sección de actualización
@@ -245,7 +241,9 @@ def abrir_beneficiarios(parent):
     actualizar_parentesco = tk.Entry(frame_actualizacion)
     actualizar_parentesco.pack(pady=2)
 
-    boton_actualizar = tk.Button(frame_actualizacion, text="Actualizar Beneficiario", command=lambda: mostrar_mensaje("Beneficiario actualizado"))
+    boton_actualizar = tk.Button(frame_actualizacion, text="Actualizar Beneficiario", 
+                             command=lambda: actualizar_beneficiario(actualizar_di.get(), 
+                                                                     actualizar_parentesco.get()))
     boton_actualizar.pack(pady=10)
 
     ventana_beneficiarios.mainloop()
@@ -265,6 +263,22 @@ def registrar_beneficiario(di, parentesco, di_cotizante):
         messagebox.showinfo("Éxito", "Beneficiario registrado correctamente.")
     except Exception as e:
         messagebox.showerror("Error", f"Error al registrar beneficiario: {e}")
+
+def actualizar_beneficiario(di, nuevo_parentesco):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = "UPDATE Beneficiario SET Parentesco = %s WHERE DI = %s"
+        cursor.execute(query, (nuevo_parentesco, di))
+        conexion.commit()
+        conexion.close()
+        messagebox.showinfo("Éxito", "Beneficiario actualizado correctamente.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al actualizar beneficiario: {e}")
 
 # Ventana de Empresas
 def abrir_empresas(parent):
