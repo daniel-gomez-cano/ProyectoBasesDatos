@@ -17,6 +17,44 @@ def conectar_db():
         print("Error al conectar a la base de datos:", e)
         return None
 
+def abrir_registro_usuario():
+    ventana_registro = tk.Toplevel(ventana)
+    ventana_registro.title("Registrar Usuario")
+    ventana_registro.geometry("400x350")
+    ventana_registro.resizable(False, False)
+
+    # Etiqueta y entrada para el ID
+    label_id = tk.Label(ventana_registro, text="ID:")
+    label_id.pack(pady=5)
+    entrada_id = tk.Entry(ventana_registro)
+    entrada_id.pack(pady=5)
+
+    # Etiqueta y entrada para el usuario
+    label_usuario = tk.Label(ventana_registro, text="Usuario:")
+    label_usuario.pack(pady=5)
+    entrada_usuario = tk.Entry(ventana_registro)
+    entrada_usuario.pack(pady=5)
+
+    # Etiqueta y entrada para la contraseña
+    label_contrasena = tk.Label(ventana_registro, text="Contraseña:")
+    label_contrasena.pack(pady=5)
+    entrada_contrasena = tk.Entry(ventana_registro, show="*")
+    entrada_contrasena.pack(pady=5)
+
+    # Selección del rol
+    label_rol = tk.Label(ventana_registro, text="Seleccione su rol:")
+    label_rol.pack(pady=5)
+    rol_var = tk.StringVar()
+    roles = ["Administrador", "Cotizante", "Banco"]
+    for rol in roles:
+        tk.Radiobutton(ventana_registro, text=rol, variable=rol_var, value=rol).pack(anchor=tk.W)
+
+    # Botón para registrar usuario
+    boton_registrar = tk.Button(ventana_registro, text="Registrar Usuario", command=lambda: registrar_usuario(
+        entrada_id.get(), entrada_usuario.get(), entrada_contrasena.get(), rol_var.get()
+    ))
+    boton_registrar.pack(pady=20)
+
 # Función para manejar el inicio de sesión
 def validar_usuario(usuario, contrasena, rol):
     conexion = conectar_db()
@@ -51,6 +89,25 @@ def iniciar_sesion():
         abrir_dashboard(usuario, rol, ventana)
     else:
         messagebox.showerror("Error", "Usuario o contraseña incorrectos o cuenta inactiva.")
+
+def registrar_usuario(id, usuario, contrasena, rol):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = """
+            INSERT INTO Usuario (ID, Usuario, Contrasena, Rol)
+            VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(query, (id, usuario, contrasena, rol))
+        conexion.commit()
+        conexion.close()
+        messagebox.showinfo("Éxito", "Usuario registrado correctamente.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al registrar usuario: {e}")
 
 # Función para abrir el dashboard
 def abrir_dashboard(usuario, rol, screen):
@@ -88,9 +145,9 @@ def abrir_dashboard(usuario, rol, screen):
         ("Afiliados", lambda: abrir_afiliado(dashboard)),
         ("Empresas", lambda: abrir_empresas(dashboard)),
         ("Contratos", lambda: abrir_contratos(dashboard)),
-        ("Pagos", lambda: mostrar_mensaje("Pagos")),
-        ("IPS", lambda: mostrar_mensaje("IPS")),
-        ("Órdenes de Servicio", lambda: mostrar_mensaje("Órdenes de Servicio"))
+        ("Pagos", lambda: abrir_pagos(dashboard)),
+        ("IPS", lambda: abrir_ips(dashboard)),
+        ("Órdenes de Servicio", lambda: abrir_ordenes_servicio(dashboard))
     ]
 
     for texto, comando in botones:
@@ -109,7 +166,7 @@ def abrir_listados(parent):
     parent.destroy()  # Cierra el dashboard principal
     ventana_listados = tk.Tk()
     ventana_listados.title("Listados")
-    ventana_listados.geometry("800x600")
+    ventana_listados.geometry("1200x600")
 
     # Panel izquierdo para selección
     frame_izquierdo = tk.Frame(ventana_listados, bg="lightgray", width=200)
@@ -153,7 +210,7 @@ def mostrar_listado(tipo_listado, frame):
     # Configuración de columnas de ejemplo
     columnas = ("#1", "#2", "#3", "4", "5", "6")
     tabla = ttk.Treeview(frame, columns=columnas, show="headings")
-    tabla.heading("#1", text="Columna 1")
+    tabla.heading("#1", text="PK")
     tabla.heading("#2", text="Columna 2")
     tabla.heading("#3", text="Columna 3")
     tabla.heading("#4", text="Columna 4")
@@ -162,8 +219,11 @@ def mostrar_listado(tipo_listado, frame):
 
     # Consulta dinámica según el tipo de listado
     query_dict = {
-        "Cotizantes": "SELECT * FROM Cotizante",
-        "Beneficiarios": "SELECT * FROM Beneficiario",
+        "Cotizantes": """SELECT Cotizante.di, nombres, apellidos, cotizante.salario, rango_salarial, ips
+                            FROM Cotizante INNER JOIN AFILIADO ON AFILIADO.DI = COTIZANTE.DI
+                            INNER JOIN SUELDO ON SUELDO.SALARIO = COTIZANTE.SALARIO""",
+        "Beneficiarios": """SELECT Beneficiario.di, nombres, apellidos, ciudad_residencia, telefono, estado_actual 
+                            FROM Beneficiario INNER JOIN AFILIADO ON AFILIADO.DI = BENEFICIARIO.DI""",
         "Empresas": "SELECT * FROM Empresa",
         "Contratos": "SELECT * FROM Contrato",
         "Aportes": "SELECT * FROM Pago_aportes",
@@ -208,7 +268,7 @@ def abrir_afiliado(parent):
     boton_generar = tk.Button(frame_izquierdo, text="Afiliados Inactivos", command=lambda: listar_afiliados_inactivos_retirados(frame_derecho))
     boton_generar.pack(pady=10)
 
-    boton_generar = tk.Button(frame_izquierdo, text="Afiliados Independientes", command=lambda: print("Este botón todavía no se implementará"))
+    boton_generar = tk.Button(frame_izquierdo, text="Afiliados Independientes", command=lambda: listar_cotizantes_independientes(frame_derecho))
     boton_generar.pack(pady=10)
 
     boton_generar = tk.Button(frame_izquierdo, text="Cotizantes", command=lambda: abrir_cotizantes(ventana_afiliado))
@@ -321,45 +381,82 @@ def listar_afiliados_inactivos_retirados(frame_derecho):
     except Exception as e:
         messagebox.showerror("Error", f"Error al listar afiliados inactivos y retirados: {e}")
 
+def listar_cotizantes_independientes(frame_derecho):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = "SELECT * FROM Cotizante WHERE Tipo = 'Independiente'"
+        cursor.execute(query)
+        resultados = cursor.fetchall()
+        conexion.close()
+
+        # Limpiar el frame_derecho antes de mostrar nuevos resultados
+        for widget in frame_derecho.winfo_children():
+            widget.destroy()
+
+        label_resultado = tk.Label(frame_derecho, text="Cotizantes Independientes", font=("Arial", 14), bg="white")
+        label_resultado.pack(pady=10)
+
+        # Configuración de columnas
+        columnas = ("DI", "Tipo", "Salario", "Fecha_1_afiliacion", "IPS")
+        tabla = ttk.Treeview(frame_derecho, columns=columnas, show="headings")
+        tabla.heading("DI", text="DI")
+        tabla.heading("Tipo", text="Tipo")
+        tabla.heading("Salario", text="Salario")
+        tabla.heading("Fecha_1_afiliacion", text="Fecha 1° Afiliación")
+        tabla.heading("IPS", text="IPS")
+
+        # Llenar la tabla con los datos obtenidos
+        for fila in resultados:
+            tabla.insert("", tk.END, values=fila)
+
+        tabla.pack(padx=10, pady=10)
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al listar cotizantes independientes: {e}")
+
 def abrir_cotizantes(parent):
     parent.destroy()
     ventana_cotizantes = tk.Tk()
-    ventana_cotizantes.title("Gestión de cotizantes")
+    ventana_cotizantes.title("Gestión de Cotizantes")
     ventana_cotizantes.geometry("800x600")
 
     # Sección de registro
-    frame_registro = tk.LabelFrame(ventana_cotizantes, text="Registro de cotizantes", padx=10, pady=10)
+    frame_registro = tk.LabelFrame(ventana_cotizantes, text="Registro de Cotizantes", padx=10, pady=10)
     frame_registro.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
 
     tk.Label(frame_registro, text="DI:").pack(pady=2)
     entrada_di = tk.Entry(frame_registro)
     entrada_di.pack(pady=2)
 
-    tk.Label(frame_registro, text="Tipo").pack(pady=2)
+    tk.Label(frame_registro, text="Tipo:").pack(pady=2)
     opciones_tipo = ["Dependiente", "Independiente"]
     tipo_var = tk.StringVar(value=opciones_tipo[0])
     combo_tipo = ttk.Combobox(frame_registro, textvariable=tipo_var, values=opciones_tipo)
     combo_tipo.pack(pady=10)
 
     tk.Label(frame_registro, text="Salario:").pack(pady=2)
-    salario = tk.Entry(frame_registro)
-    salario.pack(pady=2)
+    entrada_salario = tk.Entry(frame_registro)
+    entrada_salario.pack(pady=2)
 
     tk.Label(frame_registro, text="Fecha 1° Afiliación (AAAA-MM-DD):").pack(pady=2)
-    fecha = tk.Entry(frame_registro)
-    fecha.pack(pady=2)
+    entrada_fecha = tk.Entry(frame_registro)
+    entrada_fecha.pack(pady=2)
 
     tk.Label(frame_registro, text="IPS:").pack(pady=2)
     ips = tk.Entry(frame_registro)
     ips.pack(pady=2)
 
     boton_registrar = tk.Button(frame_registro, text="Agregar Cotizante", command=lambda: registrar_cotizante(
-        entrada_di.get(), combo_tipo.get(), salario.get(), fecha.get(), ips.get()
+        entrada_di.get(), combo_tipo.get(), entrada_salario.get(), entrada_fecha.get(), ips.get()
     ))
     boton_registrar.pack(pady=10)
 
     # Botón de regreso al dashboard
-    boton_regresar = tk.Button(frame_registro, text="Regresar", command=lambda: abrir_afiliado(ventana_cotizantes))
+    boton_regresar = tk.Button(frame_registro, text="Regresar", command=lambda: abrir_dashboard("Usuario", "Administrador", ventana_cotizantes))
     boton_regresar.pack(side=tk.BOTTOM, pady=20)
 
     # Sección de actualización
@@ -370,7 +467,7 @@ def abrir_cotizantes(parent):
     actualizar_di = tk.Entry(frame_actualizacion)
     actualizar_di.pack(pady=2)
 
-    tk.Label(frame_actualizacion, text="Tipo").pack(pady=2)
+    tk.Label(frame_actualizacion, text="Tipo:").pack(pady=2)
     actualizar_opciones_tipo = ["Dependiente", "Independiente"]
     actualizar_tipo_var = tk.StringVar(value=opciones_tipo[0])
     actualizar_combo_tipo = ttk.Combobox(frame_actualizacion, textvariable=actualizar_tipo_var, values=actualizar_opciones_tipo)
@@ -409,10 +506,44 @@ def registrar_cotizante(di, tipo, salario, fecha_1_afiliacion, ips):
         """
         cursor.execute(query, (di, tipo, salario, fecha_1_afiliacion, ips))
         conexion.commit()
+
+        # Calcular y registrar el rango salarial
+        rango_salarial = calcular_rango_salarial(salario)
+        registrar_sueldo(salario, rango_salarial)
+
         conexion.close()
         messagebox.showinfo("Éxito", "Cotizante registrado correctamente.")
     except Exception as e:
         messagebox.showerror("Error", f"Error al registrar cotizante: {e}")
+
+def calcular_rango_salarial(salario):
+    salario_minimo = 1300000
+    salario = float(salario)  # Convertir el salario a un valor numérico
+    if salario < 2 * salario_minimo:
+        return 'A'
+    elif 2 * salario_minimo <= salario <= 5 * salario_minimo:
+        return 'B'
+    else:
+        return 'C'
+
+def registrar_sueldo(salario, rango_salarial):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = """
+            INSERT INTO Sueldo (Salario, Rango_salarial)
+            VALUES (%s, %s)
+        """
+        cursor.execute(query, (salario, rango_salarial))
+        conexion.commit()
+        conexion.close()
+        messagebox.showinfo("Éxito", "Sueldo registrado correctamente.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al registrar sueldo: {e}")
 
 def actualizar_cotizante(di, nuevo_tipo=None, nuevo_salario=None, nueva_fecha_1_afiliacion=None, nuevo_ips=None):
     conexion = conectar_db()
@@ -445,6 +576,12 @@ def actualizar_cotizante(di, nuevo_tipo=None, nuevo_salario=None, nueva_fecha_1_
 
         cursor.execute(query, params)
         conexion.commit()
+
+        # Si se actualiza el salario, también se debe actualizar el rango salarial
+        if nuevo_salario:
+            rango_salarial = calcular_rango_salarial(nuevo_salario)
+            registrar_sueldo(nuevo_salario, rango_salarial)
+
         conexion.close()
         messagebox.showinfo("Éxito", "Cotizante actualizado correctamente.")
     except Exception as e:
@@ -454,7 +591,7 @@ def abrir_in_afiliado(parent):
     parent.destroy()
     ventana_afiliado = tk.Tk()
     ventana_afiliado.title("Crear afiliado")
-    ventana_afiliado.geometry("800x600")
+    ventana_afiliado.geometry("800x720")
 
     # Sección de registro
     frame_registro = tk.LabelFrame(ventana_afiliado, text="Registro de afiliado", padx=10, pady=10)
@@ -520,8 +657,9 @@ def abrir_in_afiliado(parent):
     boton_registrar.pack(pady=10)
 
     # Sección de actualización
-    frame_actualizacion = tk.LabelFrame(ventana_afiliado, text="Actualizar Afiliado", padx=10, pady=10)
-    frame_actualizacion.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+    # Sección de registro
+    frame_actualizacion = tk.LabelFrame(ventana_afiliado, text="Registro de afiliado", padx=10, pady=10)
+    frame_actualizacion.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
 
     tk.Label(frame_actualizacion, text="DI:").pack(pady=2)
     actualizar_di = tk.Entry(frame_actualizacion)
@@ -579,7 +717,7 @@ def abrir_in_afiliado(parent):
     boton_actualizar.pack(pady=10)
 
     # Botón de regreso al dashboard
-    boton_regresar = tk.Button(frame_registro, text="Regresar", command=lambda: abrir_afiliado(ventana_afiliado))
+    boton_regresar = tk.Button(ventana_afiliado, text="Regresar", command=lambda: abrir_afiliado(ventana_afiliado))
     boton_regresar.pack(side=tk.BOTTOM, pady=20)
 
     ventana_afiliado.mainloop()
@@ -754,7 +892,7 @@ def abrir_empresas(parent):
     frame_registro = tk.LabelFrame(ventana_empresas, text="Registro de Empresas", padx=10, pady=10)
     frame_registro.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
 
-    tk.Label(frame_registro, text="NIT:").pack(pady=2)
+    tk.Label(frame_registro, text="NIT/RUT:").pack(pady=2)
     entrada_nit = tk.Entry(frame_registro)
     entrada_nit.pack(pady=2)
 
@@ -781,6 +919,10 @@ def abrir_empresas(parent):
     boton_registrar = tk.Button(frame_registro, text="Registrar Empresa", command=lambda: registrar_empresa(
         entrada_nit.get(), entrada_ciudad.get(), entrada_razon.get(), entrada_direccion.get(), entrada_telefono.get(), entrada_contacto.get() ))
     boton_registrar.pack(pady=10)
+
+    boton_registrar_afiliado = tk.Button(frame_registro, text="Registrar Cotizante Independiente", command=lambda: registrar_empresa(
+        entrada_nit.get(), entrada_ciudad.get(), entrada_razon.get(), entrada_direccion.get(), entrada_telefono.get(), entrada_contacto.get() ))
+    boton_registrar_afiliado.pack(pady=10)
 
     # Sección de actualización
     frame_actualizacion = tk.LabelFrame(ventana_empresas, text="Actualizar Empresa", padx=10, pady=10)
@@ -831,7 +973,7 @@ def registrar_empresa(nit, ciudad ,razon_social, direccion, telefono, contacto):
         cursor.execute(query, (nit, ciudad, razon_social, direccion, telefono, contacto))
         conexion.commit()
         conexion.close()
-        messagebox.showinfo("Éxito", "Empresa registrada correctamente.")
+        messagebox.showinfo("Éxito", "Empresa/Independite registrado correctamente.")
     except Exception as e:
         messagebox.showerror("Error", f"Error al registrar empresa: {e}")
 
@@ -876,79 +1018,554 @@ def actualizar_empresa(nit, nueva_ciudad = None, nueva_razonsocial = None, nueva
     except Exception as e:
         messagebox.showerror("Error", f"Error al actualizar empresa: {e}")
 
+# CONTRATOS
 def abrir_contratos(parent):
     parent.destroy()
     ventana_contratos = tk.Tk()
     ventana_contratos.title("Gestión de Contratos")
-    ventana_contratos.geometry("800x600")
+    ventana_contratos.geometry("800x650")
 
     # Sección de registro
     frame_registro = tk.LabelFrame(ventana_contratos, text="Registro de Contratos", padx=10, pady=10)
     frame_registro.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
 
     # Botón de regreso al dashboard
-    boton_regresar = tk.Button(frame_registro, text="Regresar", command=lambda: abrir_dashboard("Usuario", "Administrador",ventana_contratos))
+    boton_regresar = tk.Button(frame_registro, text="Regresar", command=lambda: abrir_dashboard("Usuario", "Administrador", ventana_contratos))
     boton_regresar.pack(side=tk.BOTTOM, pady=20)
 
     tk.Label(frame_registro, text="#Contrato:").pack(pady=2)
-    entrada_nit = tk.Entry(frame_registro)
-    entrada_nit.pack(pady=2)
+    entrada_n_contrato = tk.Entry(frame_registro)
+    entrada_n_contrato.pack(pady=2)
 
     tk.Label(frame_registro, text="#NRadicado:").pack(pady=2)
-    entrada_nit = tk.Entry(frame_registro)
-    entrada_nit.pack(pady=2)
+    entrada_n_radicado = tk.Entry(frame_registro)
+    entrada_n_radicado.pack(pady=2)
 
     tk.Label(frame_registro, text="Estado:").pack(pady=2)
     opciones_estado = ["Activo", "Retirado"]
     estado_var = tk.StringVar(value=opciones_estado[0])
-
     combo_estados = ttk.Combobox(frame_registro, textvariable=estado_var, values=opciones_estado)
     combo_estados.pack(pady=10)
 
     tk.Label(frame_registro, text="Salario_base:").pack(pady=2)
-    entrada_razon = tk.Entry(frame_registro)
-    entrada_razon.pack(pady=2)
+    entrada_salario_base = tk.Entry(frame_registro)
+    entrada_salario_base.pack(pady=2)
+
+    tk.Label(frame_registro, text="Fecha_recibo (AAAA-MM-DD):").pack(pady=2)
+    entrada_fecha_recibo = tk.Entry(frame_registro)
+    entrada_fecha_recibo.pack(pady=2)
 
     tk.Label(frame_registro, text="Fecha_retiro (AAAA-MM-DD):").pack(pady=2)
-    entrada_direccion = tk.Entry(frame_registro)
-    entrada_direccion.pack(pady=2)
+    entrada_fecha_retiro = tk.Entry(frame_registro)
+    entrada_fecha_retiro.pack(pady=2)
 
-    tk.Label(frame_registro, text="Cotizante").pack(pady=2)
-    entrada_direccion = tk.Entry(frame_registro)
-    entrada_direccion.pack(pady=2)
+    tk.Label(frame_registro, text="Cotizante:").pack(pady=2)
+    entrada_cotizante = tk.Entry(frame_registro)
+    entrada_cotizante.pack(pady=2)
 
-    tk.Label(frame_registro, text="Aportes").pack(pady=2)
-    entrada_direccion = tk.Entry(frame_registro)
-    entrada_direccion.pack(pady=2)
+    tk.Label(frame_registro, text="Aportes:").pack(pady=2)
+    entrada_aportes = tk.Entry(frame_registro)
+    entrada_aportes.pack(pady=2)
 
-    tk.Label(frame_registro, text="Empresa").pack(pady=2)
-    entrada_direccion = tk.Entry(frame_registro)
-    entrada_direccion.pack(pady=2)
+    tk.Label(frame_registro, text="Empresa:").pack(pady=2)
+    entrada_empresa = tk.Entry(frame_registro)
+    entrada_empresa.pack(pady=2)
 
-    boton_registrar = tk.Button(frame_registro, text="Registrar Contrato", command=lambda: print("Boton Registro de Contrato"))
+    boton_registrar = tk.Button(frame_registro, text="Registrar Contrato", command=lambda: registrar_contrato(
+        entrada_n_contrato.get(), entrada_n_radicado.get(), combo_estados.get(), entrada_salario_base.get(),
+        entrada_fecha_recibo.get(), entrada_fecha_retiro.get(), entrada_cotizante.get(), entrada_aportes.get(), entrada_empresa.get()
+    ))
     boton_registrar.pack(pady=10)
 
     # Sección de actualización
     frame_actualizacion = tk.LabelFrame(ventana_contratos, text="Actualizar Contrato", padx=10, pady=10)
     frame_actualizacion.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-    tk.Label(frame_actualizacion, text="Estado:").pack(pady=2)
-    combo_estados_actu = ttk.Combobox(frame_actualizacion, textvariable=estado_var, values=opciones_estado)
-    combo_estados_actu.pack(pady=10)
+    tk.Label(frame_actualizacion, text="#Contrato:").pack(pady=2)
+    actualizar_n_contrato = tk.Entry(frame_actualizacion)
+    actualizar_n_contrato.pack(pady=2)
 
-    label_resultado = tk.Label(frame_actualizacion, text="Buscar estado del cotizante", font=("Arial", 14), bg="white")
-    label_resultado.pack(pady=10)
+    tk.Label(frame_actualizacion, text="#NRadicado:").pack(pady=2)
+    actualizar_n_radicado = tk.Entry(frame_actualizacion)
+    actualizar_n_radicado.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Estado:").pack(pady=2)
+    actualizar_estado_var = tk.StringVar(value=opciones_estado[0])
+    actualizar_combo_estados = ttk.Combobox(frame_actualizacion, textvariable=actualizar_estado_var, values=opciones_estado)
+    actualizar_combo_estados.pack(pady=10)
+
+    tk.Label(frame_actualizacion, text="Salario_base:").pack(pady=2)
+    actualizar_salario_base = tk.Entry(frame_actualizacion)
+    actualizar_salario_base.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Fecha_recibo (AAAA-MM-DD):").pack(pady=2)
+    actualizar_fecha_recibo = tk.Entry(frame_actualizacion)
+    actualizar_fecha_recibo.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Fecha_retiro (AAAA-MM-DD):").pack(pady=2)
+    actualizar_fecha_retiro = tk.Entry(frame_actualizacion)
+    actualizar_fecha_retiro.pack(pady=2)
 
     tk.Label(frame_actualizacion, text="Cotizante:").pack(pady=2)
-    actualizar_direccion = tk.Entry(frame_actualizacion)
-    actualizar_direccion.pack(pady=2)
+    actualizar_cotizante = tk.Entry(frame_actualizacion)
+    actualizar_cotizante.pack(pady=2)
 
-    
+    tk.Label(frame_actualizacion, text="Aportes:").pack(pady=2)
+    actualizar_aportes = tk.Entry(frame_actualizacion)
+    actualizar_aportes.pack(pady=2)
 
-    boton_actualizar = tk.Button(frame_actualizacion, text="Buscar estado", command=lambda: print("Boton que genera el estado del cotizante"))
+    tk.Label(frame_actualizacion, text="Empresa:").pack(pady=2)
+    actualizar_empresa = tk.Entry(frame_actualizacion)
+    actualizar_empresa.pack(pady=2)
+
+    boton_actualizar = tk.Button(frame_actualizacion, text="Actualizar Contrato", command=lambda: actualizar_contrato(
+        actualizar_n_contrato.get(), actualizar_n_radicado.get(), actualizar_combo_estados.get(), actualizar_salario_base.get(),
+        actualizar_fecha_recibo.get(), actualizar_fecha_retiro.get(), actualizar_cotizante.get(), actualizar_aportes.get(), actualizar_empresa.get()
+    ))
     boton_actualizar.pack(pady=10)
 
+    # Sección de búsqueda
+    frame_busqueda = tk.LabelFrame(ventana_contratos, text="Buscar estado de trabajador", padx=10, pady=10)
+    frame_busqueda.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+
+    tk.Label(frame_busqueda, text="Número contrato:").pack(pady=2)
+    num_contrato_actu = tk.Entry(frame_busqueda)
+    num_contrato_actu.pack(pady=2)
+
+    boton_buscar = tk.Button(frame_busqueda, text="Buscar estado", command=lambda: buscar_estado_cotizante(
+        num_contrato_actu.get(), label_resultado_busqueda
+    ))
+    boton_buscar.pack(pady=10)
+
+    label_resultado_busqueda = tk.Label(frame_busqueda, text="Estado cotizante", font=("Arial", 14), bg="white")
+    label_resultado_busqueda.pack(pady=10)
+
     ventana_contratos.mainloop()
+
+def buscar_estado_cotizante(n_contrato, label_resultado_busqueda):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = """
+            SELECT DISTINCT Tipo
+            FROM Cotizante
+            INNER JOIN Contrato ON Cotizante.DI = Contrato.Cotizante
+            WHERE NContrato = %s
+        """
+        cursor.execute(query, (n_contrato,))
+        resultado = cursor.fetchone()
+        conexion.close()
+
+        if resultado:
+            label_resultado_busqueda.config(text=f"Tipo de Cotizante: {resultado[0]}")
+        else:
+            label_resultado_busqueda.config(text="No se encontró información para este contrato.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al buscar estado del cotizante: {e}")
+
+def registrar_contrato(n_contrato, n_radicado, estado, salario_base, fecha_recibo, fecha_retiro, cotizante, aportes, empresa):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = """
+            INSERT INTO Contrato (NContrato, NRadicado, Estado, Salario_base, Fecha_recibo, Fecha_retiro, Cotizante, Aportes, Empresa)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(query, (n_contrato, n_radicado, estado, salario_base, fecha_recibo, fecha_retiro, cotizante, aportes, empresa))
+        conexion.commit()
+        conexion.close()
+        messagebox.showinfo("Éxito", "Contrato registrado correctamente.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al registrar contrato: {e}")
+
+def actualizar_contrato(n_contrato, nuevo_n_radicado=None, nuevo_estado=None, nuevo_salario_base=None, nueva_fecha_recibo=None, nueva_fecha_retiro=None, nuevo_cotizante=None, nuevo_aportes=None, nueva_empresa=None):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = "UPDATE Contrato SET "
+        params = []
+
+        if nuevo_n_radicado:
+            query += "NRadicado = %s, "
+            params.append(nuevo_n_radicado)
+        if nuevo_estado:
+            query += "Estado = %s, "
+            params.append(nuevo_estado)
+        if nuevo_salario_base:
+            query += "Salario_base = %s, "
+            params.append(nuevo_salario_base)
+        if nueva_fecha_recibo:
+            query += "Fecha_recibo = %s, "
+            params.append(nueva_fecha_recibo)
+        if nueva_fecha_retiro:
+            query += "Fecha_retiro = %s, "
+            params.append(nueva_fecha_retiro)
+        if nuevo_cotizante:
+            query += "Cotizante = %s, "
+            params.append(nuevo_cotizante)
+        if nuevo_aportes:
+            query += "Aportes = %s, "
+            params.append(nuevo_aportes)
+        if nueva_empresa:
+            query += "Empresa = %s, "
+            params.append(nueva_empresa)
+
+        # Eliminar la última coma y espacio
+        query = query.rstrip(", ")
+        query += " WHERE NContrato = %s"
+        params.append(n_contrato)
+
+        cursor.execute(query, params)
+        conexion.commit()
+        conexion.close()
+        messagebox.showinfo("Éxito", "Contrato actualizado correctamente.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al actualizar contrato: {e}")
+
+# PAGOS
+def abrir_pagos(parent):
+    parent.destroy()  # Cierra la ventana anterior
+    ventana_pagos = tk.Tk()
+    ventana_pagos.title("Gestión de Pagos")
+    ventana_pagos.geometry("800x600")
+
+    # Sección de registro
+    frame_registro = tk.LabelFrame(ventana_pagos, text="Registro de Pagos", padx=10, pady=10)
+    frame_registro.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+
+    tk.Label(frame_registro, text="Número Pago:").pack(pady=2)
+    entrada_n_pago = tk.Entry(frame_registro)
+    entrada_n_pago.pack(pady=2)
+
+    tk.Label(frame_registro, text="Valor:").pack(pady=2)
+    entrada_valor = tk.Entry(frame_registro)
+    entrada_valor.pack(pady=2)
+
+    tk.Label(frame_registro, text="Fecha (AAAA-MM-DD):").pack(pady=2)
+    entrada_fecha = tk.Entry(frame_registro)
+    entrada_fecha.pack(pady=2)
+
+    boton_registrar = tk.Button(frame_registro, text="Agregar Pago", command=lambda: registrar_pago(
+        entrada_n_pago.get(), entrada_valor.get(), entrada_fecha.get()
+    ))
+    boton_registrar.pack(pady=10)
+
+    # Botón de regreso al dashboard
+    boton_regresar = tk.Button(frame_registro, text="Regresar", command=lambda: abrir_dashboard("Usuario", "Administrador", ventana_pagos))
+    boton_regresar.pack(side=tk.BOTTOM, pady=20)
+
+    # Sección de actualización
+    frame_actualizacion = tk.LabelFrame(ventana_pagos, text="Actualización de Pagos", padx=10, pady=10)
+    frame_actualizacion.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
+
+    tk.Label(frame_actualizacion, text="Número Pago:").pack(pady=2)
+    entrada_actu_n_pago = tk.Entry(frame_actualizacion)
+    entrada_actu_n_pago.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Valor:").pack(pady=2)
+    entrada_actu_valor = tk.Entry(frame_actualizacion)
+    entrada_actu_valor.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Fecha (AAAA-MM-DD):").pack(pady=2)
+    entrada_actu_fecha = tk.Entry(frame_actualizacion)
+    entrada_actu_fecha.pack(pady=2)
+
+    boton_actualizar = tk.Button(frame_actualizacion, text="Actualizar Pago", command=lambda: actualizar_pago(
+        entrada_actu_n_pago.get(), entrada_actu_valor.get(), entrada_actu_fecha.get()
+    ))
+    boton_actualizar.pack(pady=10)
+
+    ventana_pagos.mainloop()
+
+def registrar_pago(n_pago, valor_pagado, fecha_pago):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = """
+            INSERT INTO Pago_aportes (NPago, Valor_pagado, Fecha_pago)
+            VALUES (%s, %s, %s)
+        """
+        cursor.execute(query, (n_pago, valor_pagado, fecha_pago))
+        conexion.commit()
+        conexion.close()
+        messagebox.showinfo("Éxito", "Pago registrado correctamente.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al registrar pago: {e}")
+
+def actualizar_pago(n_pago, nuevo_valor_pagado=None, nueva_fecha_pago=None):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = "UPDATE Pago_aportes SET "
+        params = []
+
+        if nuevo_valor_pagado:
+            query += "Valor_pagado = %s, "
+            params.append(nuevo_valor_pagado)
+        if nueva_fecha_pago:
+            query += "Fecha_pago = %s, "
+            params.append(nueva_fecha_pago)
+
+        # Eliminar la última coma y espacio
+        query = query.rstrip(", ")
+        query += " WHERE NPago = %s"
+        params.append(n_pago)
+
+        cursor.execute(query, params)
+        conexion.commit()
+        conexion.close()
+        messagebox.showinfo("Éxito", "Pago actualizado correctamente.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al actualizar pago: {e}")
+
+def abrir_ordenes_servicio(parent):
+    parent.destroy()  # Cierra la ventana anterior
+    ventana_ordenes = tk.Tk()
+    ventana_ordenes.title("Gestión de Órdenes de Servicio")
+    ventana_ordenes.geometry("800x600")
+
+    # Sección de registro
+    frame_registro = tk.LabelFrame(ventana_ordenes, text="Registro de Órdenes de Servicio", padx=10, pady=10)
+    frame_registro.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+
+    tk.Label(frame_registro, text="Código:").pack(pady=2)
+    entrada_codigo = tk.Entry(frame_registro)
+    entrada_codigo.pack(pady=2)
+
+    tk.Label(frame_registro, text="Fecha (AAAA-MM-DD):").pack(pady=2)
+    entrada_fecha = tk.Entry(frame_registro)
+    entrada_fecha.pack(pady=2)
+
+    tk.Label(frame_registro, text="Nombre médico:").pack(pady=2)
+    entrada_medico = tk.Entry(frame_registro)
+    entrada_medico.pack(pady=2)
+
+    tk.Label(frame_registro, text="Diagnóstico:").pack(pady=2)
+    entrada_diagnostico = tk.Entry(frame_registro)
+    entrada_diagnostico.pack(pady=2)
+
+    boton_registrar = tk.Button(frame_registro, text="Agregar Orden de Servicio", command=lambda: registrar_orden_servicio(
+        entrada_codigo.get(), entrada_fecha.get(), entrada_medico.get(), entrada_diagnostico.get()
+    ))
+    boton_registrar.pack(pady=10)
+
+    # Botón de regreso al dashboard
+    boton_regresar = tk.Button(frame_registro, text="Regresar", command=lambda: abrir_dashboard("Usuario", "Administrador", ventana_ordenes))
+    boton_regresar.pack(side=tk.BOTTOM, pady=20)
+
+    # Sección de actualización
+    frame_actualizacion = tk.LabelFrame(ventana_ordenes, text="Actualización de Órdenes de Servicio", padx=10, pady=10)
+    frame_actualizacion.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
+
+    tk.Label(frame_actualizacion, text="Código:").pack(pady=2)
+    entrada_actu_codigo = tk.Entry(frame_actualizacion)
+    entrada_actu_codigo.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Fecha (AAAA-MM-DD):").pack(pady=2)
+    entrada_actu_fecha = tk.Entry(frame_actualizacion)
+    entrada_actu_fecha.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Nombre médico:").pack(pady=2)
+    entrada_actu_medico = tk.Entry(frame_actualizacion)
+    entrada_actu_medico.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Diagnóstico:").pack(pady=2)
+    entrada_actu_diagnostico = tk.Entry(frame_actualizacion)
+    entrada_actu_diagnostico.pack(pady=2)
+
+    boton_actualizar = tk.Button(frame_actualizacion, text="Actualizar Orden de Servicio", command=lambda: actualizar_orden_servicio(
+        entrada_actu_codigo.get(), entrada_actu_fecha.get(), entrada_actu_medico.get(), entrada_actu_diagnostico.get()
+    ))
+    boton_actualizar.pack(pady=10)
+
+    ventana_ordenes.mainloop()
+
+def registrar_orden_servicio(codigo, fecha, nombre_medico, diagnostico):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = """
+            INSERT INTO Orden_Servicio (Codigo, Fecha, Nombre_medico, Diagnostico)
+            VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(query, (codigo, fecha, nombre_medico, diagnostico))
+        conexion.commit()
+        conexion.close()
+        messagebox.showinfo("Éxito", "Orden de servicio registrada correctamente.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al registrar orden de servicio: {e}")
+
+def actualizar_orden_servicio(codigo, nueva_fecha=None, nuevo_nombre_medico=None, nuevo_diagnostico=None):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = "UPDATE Orden_Servicio SET "
+        params = []
+
+        if nueva_fecha:
+            query += "Fecha = %s, "
+            params.append(nueva_fecha)
+        if nuevo_nombre_medico:
+            query += "Nombre_medico = %s, "
+            params.append(nuevo_nombre_medico)
+        if nuevo_diagnostico:
+            query += "Diagnostico = %s, "
+            params.append(nuevo_diagnostico)
+
+        # Eliminar la última coma y espacio
+        query = query.rstrip(", ")
+        query += " WHERE Codigo = %s"
+        params.append(codigo)
+
+        cursor.execute(query, params)
+        conexion.commit()
+        conexion.close()
+        messagebox.showinfo("Éxito", "Orden de servicio actualizada correctamente.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al actualizar orden de servicio: {e}")
+
+#IPS
+def abrir_ips(parent):
+    parent.destroy()  # Cierra la ventana anterior
+    ventana_ips = tk.Tk()
+    ventana_ips.title("Gestión de IPS")
+    ventana_ips.geometry("800x600")
+
+    # Sección de registro
+    frame_registro = tk.LabelFrame(ventana_ips, text="Registro de IPS", padx=10, pady=10)
+    frame_registro.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+
+    tk.Label(frame_registro, text="NIT:").pack(pady=2)
+    entrada_nit = tk.Entry(frame_registro)
+    entrada_nit.pack(pady=2)
+
+    tk.Label(frame_registro, text="Servicio:").pack(pady=2)
+    entrada_servicio = tk.Entry(frame_registro)
+    entrada_servicio.pack(pady=2)
+
+    tk.Label(frame_registro, text="Razón social:").pack(pady=2)
+    entrada_razon = tk.Entry(frame_registro)
+    entrada_razon.pack(pady=2)
+
+    tk.Label(frame_registro, text="Nivel de atención:").pack(pady=2)
+    entrada_atencion = tk.Entry(frame_registro)
+    entrada_atencion.pack(pady=2)
+
+    boton_registrar = tk.Button(frame_registro, text="Agregar IPS", command=lambda: registrar_ips(
+        entrada_nit.get(), entrada_servicio.get(), entrada_razon.get(), entrada_atencion.get()
+    ))
+    boton_registrar.pack(pady=10)
+
+    # Botón de regreso al dashboard
+    boton_regresar = tk.Button(frame_registro, text="Regresar", command=lambda: abrir_dashboard("Usuario", "Administrador", ventana_ips))
+    boton_regresar.pack(side=tk.BOTTOM, pady=20)
+
+    # Sección de actualización
+    frame_actualizacion = tk.LabelFrame(ventana_ips, text="Actualización de IPS", padx=10, pady=10)
+    frame_actualizacion.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
+
+    tk.Label(frame_actualizacion, text="NIT:").pack(pady=2)
+    entrada_actu_nit = tk.Entry(frame_actualizacion)
+    entrada_actu_nit.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Servicio:").pack(pady=2)
+    entrada_actu_servicio = tk.Entry(frame_actualizacion)
+    entrada_actu_servicio.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Razón social:").pack(pady=2)
+    entrada_actu_razon = tk.Entry(frame_actualizacion)
+    entrada_actu_razon.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Nivel de atención:").pack(pady=2)
+    entrada_actu_atencion = tk.Entry(frame_actualizacion)
+    entrada_actu_atencion.pack(pady=2)
+
+    boton_actualizar = tk.Button(frame_actualizacion, text="Actualizar IPS", command=lambda: actualizar_ips(
+        entrada_actu_nit.get(), entrada_actu_servicio.get(), entrada_actu_razon.get(), entrada_actu_atencion.get()
+    ))
+    boton_actualizar.pack(pady=10)
+
+    ventana_ips.mainloop()
+
+def registrar_ips(nit, servicios, razon_social, nivel_atencion):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = """
+            INSERT INTO IPS (NIT, Servicios, Razon_social, Nivel_Atencion)
+            VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(query, (nit, servicios, razon_social, nivel_atencion))
+        conexion.commit()
+        conexion.close()
+        messagebox.showinfo("Éxito", "IPS registrada correctamente.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al registrar IPS: {e}")
+
+def actualizar_ips(nit, nuevos_servicios=None, nueva_razon_social=None, nuevo_nivel_atencion=None):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = "UPDATE IPS SET "
+        params = []
+
+        if nuevos_servicios:
+            query += "Servicios = %s, "
+            params.append(nuevos_servicios)
+        if nueva_razon_social:
+            query += "Razon_social = %s, "
+            params.append(nueva_razon_social)
+        if nuevo_nivel_atencion:
+            query += "Nivel_Atencion = %s, "
+            params.append(nuevo_nivel_atencion)
+
+        # Eliminar la última coma y espacio
+        query = query.rstrip(", ")
+        query += " WHERE NIT = %s"
+        params.append(nit)
+
+        cursor.execute(query, params)
+        conexion.commit()
+        conexion.close()
+        messagebox.showinfo("Éxito", "IPS actualizada correctamente.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al actualizar IPS: {e}")
 
 # Placeholder para mostrar mensajes al hacer clic en botones
 def mostrar_mensaje(seccion):
@@ -957,7 +1574,7 @@ def mostrar_mensaje(seccion):
 # Configuración de la ventana principal
 ventana = tk.Tk()
 ventana.title("Inicio de Sesión")
-ventana.geometry("400x300")
+ventana.geometry("400x350")
 ventana.resizable(False, False)
 
 # Etiqueta y entrada para el usuario
@@ -983,5 +1600,9 @@ for rol in roles:
 # Botón para iniciar sesión
 boton_iniciar = tk.Button(ventana, text="Iniciar Sesión", command=iniciar_sesion)
 boton_iniciar.pack(pady=20)
+
+# Botón para registrar un nuevo usuario
+boton_registrar_usuario = tk.Button(ventana, text="Registrar Nuevo Usuario", command=abrir_registro_usuario)
+boton_registrar_usuario.pack(pady=10)
 
 ventana.mainloop()
