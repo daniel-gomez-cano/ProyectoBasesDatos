@@ -75,6 +75,110 @@ def validar_usuario(usuario, contrasena, rol):
     except Exception as e:
         messagebox.showerror("Error", f"Error en la consulta: {e}")
         return False
+    
+def mostrar_informacion_cotizante(usuario):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = """
+            select afiliado.*, cotizante.tipo, cotizante.salario, cotizante.fecha_1_afiliacion, cotizante.ips
+            from cotizante inner join afiliado on cotizante.di = afiliado.di
+            where afiliado.nombres = %s
+        """
+        cursor.execute(query, (usuario,))
+        resultado = cursor.fetchone()
+        conexion.close()
+
+        if resultado:
+            ventana_cotizante = tk.Tk()
+            ventana_cotizante.title("Información del Cotizante")
+            ventana_cotizante.geometry("550x500")
+
+            frame_info = tk.LabelFrame(ventana_cotizante, text="Información del Cotizante", padx=10, pady=10)
+            frame_info.pack(padx=10, pady=10)
+
+            tk.Label(frame_info, text=f"DI: {resultado[0]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Tipo: {resultado[1]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Fecha Nacimiento: {resultado[2]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Estado: {resultado[3]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Nombres: {resultado[4]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Apellidos: {resultado[5]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Género: {resultado[6]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Email: {resultado[7]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Teléfono: {resultado[8]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Ciudad Residencia: {resultado[9]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Dirección: {resultado[10]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Estado Actual: {resultado[11]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Tipo Cotizante: {resultado[12]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Salario: {resultado[13]}").pack(pady=2)
+            tk.Label(frame_info, text=f"Fecha 1er Afiliación: {resultado[14]}").pack(pady=2)
+            tk.Label(frame_info, text=f"IPS: {resultado[15]}").pack(pady=2)
+
+            ventana_cotizante.mainloop()
+        else:
+            messagebox.showerror("Error", "No se encontró información para este cotizante.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al obtener la información del cotizante: {e}")
+
+# BANCO
+def abrir_banco(parent):
+    parent.destroy()  # Cierra la ventana anterior
+    ventana_pagos = tk.Tk()
+    ventana_pagos.title("Gestión de Pagos de BANCO")
+    ventana_pagos.geometry("800x600")
+
+    # Sección de registro
+    frame_registro = tk.LabelFrame(ventana_pagos, text="Registro de Pagos", padx=10, pady=10)
+    frame_registro.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+
+    tk.Label(frame_registro, text="Número Pago:").pack(pady=2)
+    entrada_n_pago = tk.Entry(frame_registro)
+    entrada_n_pago.pack(pady=2)
+
+    tk.Label(frame_registro, text="Valor:").pack(pady=2)
+    entrada_valor = tk.Entry(frame_registro)
+    entrada_valor.pack(pady=2)
+
+    tk.Label(frame_registro, text="Fecha (AAAA-MM-DD):").pack(pady=2)
+    entrada_fecha = tk.Entry(frame_registro)
+    entrada_fecha.pack(pady=2)
+
+    boton_registrar = tk.Button(frame_registro, text="Agregar Pago", command=lambda: registrar_pago(
+        entrada_n_pago.get(), entrada_valor.get(), entrada_fecha.get()
+    ))
+    boton_registrar.pack(pady=10)
+
+    # Botón de regreso al dashboard
+    boton_regresar = tk.Button(frame_registro, text="Regresar", command=lambda: ventana_pagos.destroy())
+    boton_regresar.pack(side=tk.BOTTOM, pady=20)
+
+    # Sección de actualización
+    frame_actualizacion = tk.LabelFrame(ventana_pagos, text="Actualización de Pagos", padx=10, pady=10)
+    frame_actualizacion.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
+
+    tk.Label(frame_actualizacion, text="Número Pago:").pack(pady=2)
+    entrada_actu_n_pago = tk.Entry(frame_actualizacion)
+    entrada_actu_n_pago.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Valor:").pack(pady=2)
+    entrada_actu_valor = tk.Entry(frame_actualizacion)
+    entrada_actu_valor.pack(pady=2)
+
+    tk.Label(frame_actualizacion, text="Fecha (AAAA-MM-DD):").pack(pady=2)
+    entrada_actu_fecha = tk.Entry(frame_actualizacion)
+    entrada_actu_fecha.pack(pady=2)
+
+    boton_actualizar = tk.Button(frame_actualizacion, text="Actualizar Pago", command=lambda: actualizar_pago(
+        entrada_actu_n_pago.get(), entrada_actu_valor.get(), entrada_actu_fecha.get()
+    ))
+    boton_actualizar.pack(pady=10)
+
+    ventana_pagos.mainloop()
+
 
 def iniciar_sesion():
     usuario = entrada_usuario.get()
@@ -86,7 +190,12 @@ def iniciar_sesion():
 
     if validar_usuario(usuario, contrasena, rol):
         messagebox.showinfo("Inicio de sesión", f"Bienvenido {rol}: {usuario}")
-        abrir_dashboard(usuario, rol, ventana)
+        if rol == "Cotizante":
+            mostrar_informacion_cotizante(usuario)
+        elif rol == "Banco":
+            abrir_banco(ventana)
+        else:
+            abrir_dashboard(usuario, rol, ventana)
     else:
         messagebox.showerror("Error", "Usuario o contraseña incorrectos o cuenta inactiva.")
 
@@ -153,11 +262,6 @@ def abrir_dashboard(usuario, rol, screen):
     for texto, comando in botones:
         boton = tk.Button(frame_derecho, text=texto, width=20, height=2, command=comando)
         boton.pack(pady=5)
-
-    # Información extra para llenar espacio
-    label_info_extra = tk.Label(frame_derecho, text="Resumen de la jornada:\n- Afiliados activos: 256\n- Pagos procesados: 120\n- Órdenes pendientes: 34", 
-                                font=("Arial", 12), bg="white", justify="left")
-    label_info_extra.pack(pady=20)
 
     dashboard.mainloop()
 
@@ -260,9 +364,12 @@ def abrir_afiliado(parent):
     # Panel izquierdo para selección
     frame_izquierdo = tk.Frame(ventana_afiliado, bg="lightgray", width=200)
     frame_izquierdo.pack(side=tk.LEFT, fill=tk.Y)
+    tk.Label(frame_izquierdo, text="NIT:").pack(pady=2)
+    entrada_nit = tk.Entry(frame_izquierdo)
+    entrada_nit.pack(pady=2)
 
     # Botón para generar listado
-    boton_generar = tk.Button(frame_izquierdo, text="Afiliados Activos", command=lambda: listar_afiliados_activos(frame_derecho))
+    boton_generar = tk.Button(frame_izquierdo, text="Afiliados Activos", command=lambda: listar_afiliados_activos(frame_derecho, entrada_nit.get()))
     boton_generar.pack(pady=10)
 
     boton_generar = tk.Button(frame_izquierdo, text="Afiliados Inactivos", command=lambda: listar_afiliados_inactivos_retirados(frame_derecho))
@@ -293,7 +400,8 @@ def abrir_afiliado(parent):
 
     ventana_afiliado.mainloop()
 
-def listar_afiliados_activos(frame_derecho):
+def listar_afiliados_activos(frame_derecho, nit):
+    nit_string = str(nit)
     conexion = conectar_db()
     if not conexion:
         messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
@@ -301,8 +409,11 @@ def listar_afiliados_activos(frame_derecho):
 
     try:
         cursor = conexion.cursor()
-        query = "SELECT * FROM Afiliado WHERE Estado_actual = 'Activo'"
-        cursor.execute(query)
+        query = """select afiliado.*
+                    from afiliado inner join cotizante on afiliado.di = cotizante.di 
+                    inner join IPS on ips.nit = cotizante.ips
+                    where nit = %s and estado = 'Activo'"""
+        cursor.execute(query, (nit_string,))
         resultados = cursor.fetchall()
         conexion.close()
 
@@ -389,7 +500,10 @@ def listar_cotizantes_independientes(frame_derecho):
 
     try:
         cursor = conexion.cursor()
-        query = "SELECT * FROM Cotizante WHERE Tipo = 'Independiente'"
+        query = """SELECT afiliado.*
+                    FROM Cotizante INNER JOIN AFILIADO ON COTIZANTE.DI = AFILIADO.DI
+                    WHERE Cotizante.Tipo = 'Independiente' 
+                    ORDER BY estado_actual"""
         cursor.execute(query)
         resultados = cursor.fetchall()
         conexion.close()
@@ -402,13 +516,20 @@ def listar_cotizantes_independientes(frame_derecho):
         label_resultado.pack(pady=10)
 
         # Configuración de columnas
-        columnas = ("DI", "Tipo", "Salario", "Fecha_1_afiliacion", "IPS")
+        columnas = ("DI", "Tipo", "Fecha_Nac", "Estado", "Nombres", "Apellidos", "Genero", "Correo", "Telefono", "Ciudad", "Direccion", "Estado_actual")
         tabla = ttk.Treeview(frame_derecho, columns=columnas, show="headings")
         tabla.heading("DI", text="DI")
         tabla.heading("Tipo", text="Tipo")
-        tabla.heading("Salario", text="Salario")
-        tabla.heading("Fecha_1_afiliacion", text="Fecha 1° Afiliación")
-        tabla.heading("IPS", text="IPS")
+        tabla.heading("Fecha_Nac", text="Fecha_Nac")
+        tabla.heading("Estado", text="Estado")
+        tabla.heading("Nombres", text="Nombres")
+        tabla.heading("Apellidos", text="Apellidos")
+        tabla.heading("Genero", text="Genero")
+        tabla.heading("Correo", text="Correo")
+        tabla.heading("Telefono", text="Telefono")
+        tabla.heading("Ciudad", text="Ciudad")
+        tabla.heading("Direccion", text="Direccion")
+        tabla.heading("Estado_actual", text="Estado_actual")
 
         # Llenar la tabla con los datos obtenidos
         for fila in resultados:
@@ -1287,7 +1408,60 @@ def abrir_pagos(parent):
     ))
     boton_actualizar.pack(pady=10)
 
+    #busqueda
+    frame_busqueda = tk.LabelFrame(ventana_pagos, text="BUSCAR APORTES", padx=150, pady=10)
+    frame_busqueda.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+
+    tk.Label(frame_busqueda, text="DI AFILIADO:").pack(pady=2)
+    nitbusqueda = tk.Entry(frame_busqueda)
+    nitbusqueda.pack(pady=2)
+
+    tk.Label(frame_busqueda, text="Fecha 1 (AAAA-MM-DD):").pack(pady=2)
+    fechabusqueda1 = tk.Entry(frame_busqueda)
+    fechabusqueda1.pack(pady=2)
+
+    tk.Label(frame_busqueda, text="Fecha 2 (AAAA-MM-DD):").pack(pady=2)
+    fechabusqueda2 = tk.Entry(frame_busqueda)
+    fechabusqueda2.pack(pady=2)
+
+    boton_buscar = tk.Button(frame_busqueda, text="Buscar Pago", command=lambda: mostrar_pago(
+    frame_busqueda, nitbusqueda.get(), fechabusqueda1.get(), fechabusqueda2.get())) 
+    boton_buscar.pack(pady=20)
+
     ventana_pagos.mainloop()
+
+def mostrar_pago(frame_derecho, di, fecha1, fecha2):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = """select pago_aportes.*
+                    from pago_aportes inner join contrato on contrato.aportes = npago
+                    where contrato.cotizante = %s and (fecha_pago between %s and %s)"""
+        cursor.execute(query,(di, fecha1, fecha2))
+        datos = cursor.fetchall()
+        conexion.close()
+
+        label_resultado = tk.Label(frame_derecho, text="Pagos", font=("Arial", 14), bg="white")
+        label_resultado.pack(pady=10)
+
+        # Configuración de columnas
+        columnas = ("num_pago", "valor_pagado", "fecha_pago")
+        tabla = ttk.Treeview(frame_derecho, columns=columnas, show="headings")
+        tabla.heading("num_pago", text="num_pago")
+        tabla.heading("valor_pagado", text="valor_pagado")
+        tabla.heading("fecha_pago", text="fecha_pago")
+
+        # Llenar la tabla con los datos obtenidos
+        for fila in datos:
+            tabla.insert("", tk.END, values=fila)
+
+        tabla.pack(padx=10, pady=10)
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al listar citas: {e}")
 
 def registrar_pago(n_pago, valor_pagado, fecha_pago):
     conexion = conectar_db()
@@ -1364,8 +1538,12 @@ def abrir_ordenes_servicio(parent):
     entrada_diagnostico = tk.Entry(frame_registro)
     entrada_diagnostico.pack(pady=2)
 
+    tk.Label(frame_registro, text="IPS:").pack(pady=2)
+    entrada_ips = tk.Entry(frame_registro)
+    entrada_ips.pack(pady=2)
+
     boton_registrar = tk.Button(frame_registro, text="Agregar Orden de Servicio", command=lambda: registrar_orden_servicio(
-        entrada_codigo.get(), entrada_fecha.get(), entrada_medico.get(), entrada_diagnostico.get()
+        entrada_codigo.get(), entrada_fecha.get(), entrada_medico.get(), entrada_diagnostico.get(), entrada_ips.get()
     ))
     boton_registrar.pack(pady=10)
 
@@ -1393,14 +1571,20 @@ def abrir_ordenes_servicio(parent):
     entrada_actu_diagnostico = tk.Entry(frame_actualizacion)
     entrada_actu_diagnostico.pack(pady=2)
 
+    tk.Label(frame_actualizacion, text="IPS:").pack(pady=2)
+    entrada_ips_actu = tk.Entry(frame_actualizacion)
+    entrada_ips_actu.pack(pady=2)
+
     boton_actualizar = tk.Button(frame_actualizacion, text="Actualizar Orden de Servicio", command=lambda: actualizar_orden_servicio(
-        entrada_actu_codigo.get(), entrada_actu_fecha.get(), entrada_actu_medico.get(), entrada_actu_diagnostico.get()
+        entrada_actu_codigo.get(), entrada_actu_fecha.get(), entrada_actu_medico.get(), entrada_actu_diagnostico.get(), entrada_ips_actu.get()
     ))
     boton_actualizar.pack(pady=10)
 
     ventana_ordenes.mainloop()
 
-def registrar_orden_servicio(codigo, fecha, nombre_medico, diagnostico):
+def registrar_orden_servicio(codigo, fecha, nombre_medico, diagnostico, ips):
+    ips_string = str(ips)
+    codigo_int = int(codigo)
     conexion = conectar_db()
     if not conexion:
         messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
@@ -1409,17 +1593,17 @@ def registrar_orden_servicio(codigo, fecha, nombre_medico, diagnostico):
     try:
         cursor = conexion.cursor()
         query = """
-            INSERT INTO Orden_Servicio (Codigo, Fecha, Nombre_medico, Diagnostico)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO Orden_Servicio (Codigo, Fecha, Nombre_medico, Diagnostico, ips)
+            VALUES (%s, %s, %s, %s, %s)
         """
-        cursor.execute(query, (codigo, fecha, nombre_medico, diagnostico))
+        cursor.execute(query, (codigo_int, fecha, nombre_medico, diagnostico, ips_string))
         conexion.commit()
         conexion.close()
         messagebox.showinfo("Éxito", "Orden de servicio registrada correctamente.")
     except Exception as e:
         messagebox.showerror("Error", f"Error al registrar orden de servicio: {e}")
 
-def actualizar_orden_servicio(codigo, nueva_fecha=None, nuevo_nombre_medico=None, nuevo_diagnostico=None):
+def actualizar_orden_servicio(codigo, nueva_fecha=None, nuevo_nombre_medico=None, nuevo_diagnostico=None, ips=None):
     conexion = conectar_db()
     if not conexion:
         messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
@@ -1439,6 +1623,9 @@ def actualizar_orden_servicio(codigo, nueva_fecha=None, nuevo_nombre_medico=None
         if nuevo_diagnostico:
             query += "Diagnostico = %s, "
             params.append(nuevo_diagnostico)
+        if ips:
+            query += "ips = %s"
+            params.append(ips)
 
         # Eliminar la última coma y espacio
         query = query.rstrip(", ")
@@ -1484,10 +1671,6 @@ def abrir_ips(parent):
     ))
     boton_registrar.pack(pady=10)
 
-    # Botón de regreso al dashboard
-    boton_regresar = tk.Button(frame_registro, text="Regresar", command=lambda: abrir_dashboard("Usuario", "Administrador", ventana_ips))
-    boton_regresar.pack(side=tk.BOTTOM, pady=20)
-
     # Sección de actualización
     frame_actualizacion = tk.LabelFrame(ventana_ips, text="Actualización de IPS", padx=10, pady=10)
     frame_actualizacion.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
@@ -1512,8 +1695,61 @@ def abrir_ips(parent):
         entrada_actu_nit.get(), entrada_actu_servicio.get(), entrada_actu_razon.get(), entrada_actu_atencion.get()
     ))
     boton_actualizar.pack(pady=10)
+    #busqueda
+    frame_busqueda = tk.LabelFrame(ventana_ips, text="BUSCAR CITA", padx=150, pady=10)
+    frame_busqueda.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+
+    tk.Label(frame_busqueda, text="NIT:").pack(pady=2)
+    nitbusqueda = tk.Entry(frame_busqueda)
+    nitbusqueda.pack(pady=2)
+
+    tk.Label(frame_busqueda, text="fecha (AAAA-MM-DD):").pack(pady=2)
+    fechabusqueda = tk.Entry(frame_busqueda)
+    fechabusqueda.pack(pady=2)
+
+    boton_buscar = tk.Button(frame_busqueda, text="Buscar cita", command=lambda: mostrar_cita(
+        frame_busqueda, nitbusqueda.get(), fechabusqueda.get()))
+    boton_buscar.pack(pady=20)
+
+    boton_regresar = tk.Button(frame_busqueda, text="Regresar", command=lambda: abrir_dashboard("Usuario", "Administrador", ventana_ips))
+    boton_regresar.pack(side=tk.BOTTOM, pady=20)
 
     ventana_ips.mainloop()
+
+def mostrar_cita(frame_derecho, nit, fecha):
+    conexion = conectar_db()
+    if not conexion:
+        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+        return
+
+    try:
+        cursor = conexion.cursor()
+        query = """select O.*
+                    from orden_servicio O inner join ips on O.ips = ips.nit
+                    where ips.nit = %s and O.fecha = %s"""
+        cursor.execute(query,(nit, fecha))
+        datos = cursor.fetchall()
+        conexion.close()
+
+        label_resultado = tk.Label(frame_derecho, text="Citas", font=("Arial", 14), bg="white")
+        label_resultado.pack(pady=10)
+
+        # Configuración de columnas
+        columnas = ("codigo", "fecha", "nombre_medico", "diagnostico", "ips")
+        tabla = ttk.Treeview(frame_derecho, columns=columnas, show="headings")
+        tabla.heading("codigo", text="codigo")
+        tabla.heading("fecha", text="fecha")
+        tabla.heading("nombre_medico", text="nombre_medico")
+        tabla.heading("diagnostico", text="diagnostico")
+        tabla.heading("ips", text="ips")
+
+        # Llenar la tabla con los datos obtenidos
+        for fila in datos:
+            tabla.insert("", tk.END, values=fila)
+
+        tabla.pack(padx=10, pady=10)
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al listar citas: {e}")
 
 def registrar_ips(nit, servicios, razon_social, nivel_atencion):
     conexion = conectar_db()
